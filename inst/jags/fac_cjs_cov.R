@@ -1,0 +1,191 @@
+sink("inst/fac_cjs_cov.jags")
+cat("
+    model {
+
+    ###################################################################################################
+    ## 1. Priors
+    ###################################################################################################
+
+    ## ------------------------------------ 1.1 Seasonal survival ---------------------------------------
+    ##-------------------------------
+    ## 1.1a Season survival estimates
+    ##-------------------------------
+
+    ### Stationary period survival
+      mean.phi.sum ~ dunif(0, 1)                                        # Summer survival
+      PHI.sum <- pow(mean.phi.sum, nMonths.sum)
+
+      mean.phi.win ~ dunif(0, 1)                                        # Summer survival
+      PHI.win <- pow(mean.phi.win, nMonths.win)
+
+    ### Migration survival
+      mean.phi.aut <- pow(mean.PHI.aut, 1/2)
+      mean.PHI.aut ~ dbeta(3,2)
+      lmean.PHI.aut <- log(mean.PHI.aut / (1 - mean.PHI.aut))      # Logit mean fall survival
+
+
+      mean.phi.spr  ~ dbeta(3,2)                                   # Mean spring survival
+      lmean.PHI.spr <- log(mean.phi.spr / (1 - mean.phi.spr))      # Logit mean spring survival
+
+
+    ### Annual variation
+      for (t in 1:nYears){
+        epsilon.phi.spr[t] ~ dnorm(0, tau.phi.spr)T(-5, 5)      # Annual variation in spring survival
+        epsilon.phi.aut[t] ~ dnorm(0, tau.phi.aut)T(-5, 5)      # Annual variation in fall survival
+      }
+
+      tau.phi.spr <- pow(sigma.phi.spr, -2)                     # Precision of annual variation in spring survival
+      sigma.phi.spr ~ dt(0, 1, 1)T(0,)                          # Standard deviation of annual variation in spring survival
+
+      tau.phi.aut <- pow(sigma.phi.aut, -2)                     # Precision of annual variation in fall survival
+      sigma.phi.aut ~  dt(0, 1, 1)T(0,)                          # Standard deviation of annual variation in fall survival
+
+
+    ##-----------------------------
+    ## 1.2b Detection probabilities
+    ##-----------------------------
+
+    ### Mean
+      p.sum ~ dunif(0, 1)                                       # Summer detection probability
+
+      p.win ~ dunif(0, 1)                                       # Winter detection probability
+
+
+    ##-----------------------------
+    ## 1.2c Coefficients
+    ##-----------------------------
+
+    ### Mean
+    beta.spr ~ dnorm(0, 0.001)                                  # Covariate effect on spring migration
+
+    beta.aut ~ dnorm(0, 0.001)                                  # Covariate effect on fall migration
+
+
+
+    ###################################################################################################
+    ## 2. Constrain parameters
+    ###################################################################################################
+
+
+    ## -------------------------------------- 2.1 Seasonal Survival -----------------------------------
+
+    ### Migration survival
+
+      for (t in 1:nYears){
+        logit(PHI.aut[t]) <- lmean.PHI.aut + beta.aut * X.aut[t] + epsilon.phi.aut[t]  # Fall migration survival
+      } # t
+
+      for (t in 1:nYears){
+        logit(PHI.spr[t]) <- lmean.PHI.spr + beta.spr * X.spr[t] + epsilon.phi.spr[t]  # Spring migration survival
+      } # t
+
+
+
+
+    ##################################################################################################
+    ## 3. Vectorized occasion-specific survival estimates
+    ##################################################################################################
+
+    ## ------------------------- 3.1 Breeding survival estimates -----------------------
+        for (t in 1:nYears){
+          phi.sum[(2 * t) - 1] <- PHI.sum                       # Breeding season survival
+          phi.sum[2 * t]  <- PHI.aut[t] * PHI.win * PHI.spr[t]  # Between-breeding survival
+         } # t
+
+
+
+    ## --------------------------- 3.2 Winter survival estimates -----------------------
+        for (t in 1:(nYears - 1)){
+          phi.win[(2 * t) - 1] <- PHI.win                           # Overwinter survival
+          phi.win[2 * t]  <- PHI.spr[t] * PHI.sum * PHI.aut[t + 1]  # Between-winter survival
+        } # t
+
+        phi.win[2 * (nYears - 1) + 1] <- PHI.win
+
+
+
+    ##################################################################################################
+    ## 4. Likelihoods
+    ##################################################################################################
+
+
+    ## 4.1 Likelihood for summer capture-recapture data: m-array CJS model (1 age class)
+      # Multinomial likelihood
+        for(t in 1:(nOcc.sum - 1)){
+          q.sum[t] <- 1 - p.sum              # Probability of non-recapture
+        }
+
+        for (t in 1:(nOcc.sum - 1)){
+          marr.sum[t, 1:nOcc.sum] ~ dmulti(pr.sum[t, ], r.sum[t])
+        }
+
+        # Define the cell probabilities of the m-arrays
+        # Main diagonal
+        for (t in 1:(nOcc.sum - 1)){
+          pr.sum[t, t]  <- phi.sum[t] * p.sum
+
+        # Above main diagonal
+          for (j in (t + 1):(nOcc.sum - 1)){
+            pr.sum[t, j] <- prod(phi.sum[t:j]) * prod(q.sum[t:(j - 1)]) * p.sum
+          } #j
+
+        # Below main diagonal
+          for (j in 1:(t - 1)){
+            pr.sum[t, j] <- 0
+           } #j
+        } #t
+
+        # Last column: probability of non-recapture
+        for (t in 1:(nOcc.sum - 1)){
+          pr.sum[t, nOcc.sum] <- 1 - sum(pr.sum[t, 1:(nOcc.sum - 1)])
+        } #t
+
+
+    ## 4.2 Likelihood for winter capture-recapture data: m-array CJS model (1 age class)
+      # Multinomial likelihood
+      for(t in 1:(nOcc.win - 1)){
+        q.win[t] <- 1 - p.win              # Probability of non-recapture
+      }
+
+      for (t in 1:(nOcc.win - 1)){
+        marr.win[t, 1:nOcc.win] ~ dmulti(pr.win[t, ], r.win[t])
+       }
+
+    # Define the cell probabilities of the m-arrays
+    # Main diagonal
+      for (t in 1:(nOcc.win - 1)){
+        pr.win[t, t]  <- phi.win[t] * p.win
+
+      # Above main diagonal
+        for (j in (t + 1):(nOcc.win - 1)){
+          pr.win[t, j] <- prod(phi.win[t:j]) * prod(q.win[t:(j - 1)]) * p.win
+        } #j
+
+      # Below main diagonal
+        for (j in 1:(t - 1)){
+          pr.win[t, j] <- 0
+        } #j
+      } #t
+
+      # Last column: probability of non-recapture
+        for (t in 1:(nOcc.win - 1)){
+          pr.win[t, nOcc.win] <- 1 - sum(pr.win[t, 1:(nOcc.win - 1)])
+        } #t
+
+
+
+    ##################################################################################################
+    ## 5. Derived parameters
+    ##################################################################################################
+
+    ## Annual and migration (fall * spring) survival estimates
+      for (t in 1:nYears){
+        PHI.mig[t] <- PHI.aut[t] * PHI.spr[t]
+      }
+
+    ## Mean migration survival
+      mean.phi.mig <- mean(PHI.mig[])
+
+  } # end model
+    ",fill = TRUE)
+sink()

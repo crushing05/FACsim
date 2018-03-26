@@ -1,0 +1,222 @@
+---
+title: Estimability of migration survival rates from integrated breeding and winter
+  capture-recapture data
+
+author: |
+  | Clark S. Rushing^[Corresponding author: crushing@usgs.gov] $^{1,2}$
+  | $^1$U.S. Geological Survey, Patuxent Wildlife Research Center, Laurel, MD 20708
+  | $^2$Smithsonian Conservation Biology Institute, Migratory Bird Center, Washington, DC 20013
+
+abstract: |
+  1) Long-distance migration is a common phenomenon across the animal kingdom but the scale of annual migratory movements has made it difficult for researchers to estimate survival rates during these periods of the annual cycle. Estimating migration survival is particularly challenging for small-bodied species that cannot carry satellite tags, a group that includes the vast majority of migratory species. When capture-recapture data is available for linked breeding and non-breeding populations, estimation of overall migration survival is possible but current methods do not allow separate estimation of spring and autumn survival rates.    
+  2) Recent development of a Bayesian integrated survival model has provided a method to separately estimate the latent spring and autumn survival rates using capture-recapture data, though the accuracy and precision of these estimates has not been formally tested. Here, I used simulated data to explore the estimability of migration survival rates using this model.
+  3) Under a variety of biologically-realistic scenarios, I demonstrate that spring and autumn migration survival can be estimated from the integrated survival model, though estimates are biased towards the overall migration survival probability. The direction and magnitude of this bias are influenced by the relative difference in spring and autumn survival rates as well as the degree of annual variation in these rates. The inclusion covariates can improve the model's performance, especially when annual variation in migration survival rates is low. Migration survival rates can estimated from relatively short time series (4-5 years) but bias and precision of estimates are improved when longer time series (10-12 years) are available.  
+  4) The ability to estimate seasonal survival rates of small, migratory organisms opens the door to advancing our understanding of the ecology and conservation of these species. Application of this method will enable researchers to better understand when mortality occurs across the annual cycle and how the migratory periods contribute to population dynamics. Integrating summer and winter capture data requires knowledge of the migratory connectivity of sampled populations and therefore efforts to simultaneously collect both survival and tracking data should be a high priority, especially for species of conservation concern.    
+  \textbf{Keywords:} Bayesian; Cormack-Jolly-Seber; demography; integrated population model; mark-recapture; migration; migratory connectivity; survival  
+
+  
+bibliography: "r-references.bib"
+csl: "https://raw.githubusercontent.com/citation-style-language/styles/master/methods-in-ecology-and-evolution.csl"
+fontsize: 12pt
+
+output:
+  bookdown::pdf_document2:
+    toc: no
+    number_sections: no
+fig_caption: yes
+
+
+
+# LaTex settings for floating figures, line spacing, linenumbers
+header-includes:
+  - \usepackage[notablist,nofiglist,nomarkers]{endfloat}
+  - \usepackage{setspace}\doublespacing
+  - \usepackage{lineno}
+  - \linenumbers
+  
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r Setup..., message=FALSE, warning=FALSE, include=FALSE}
+knitr::opts_chunk$set(fig.pos = 'p') # Places figures on their own pages
+knitr::opts_chunk$set(out.width = '100%', dpi=300)
+knitr::write_bib(c("knitr", "stringr"), "", width = 60)
+
+# I usually load my libraries up front to keep things organized
+library(bookdown)
+library(knitr)
+library(ggplot2)
+library(dplyr)
+
+options(encoding = "UTF-8")
+basic_mu <- read.csv(here::here("inst/results/basic_mu.csv"))
+basic_corr <- read.csv(here::here("inst/results/basic_corr.csv"))
+
+cov_mu <- read.csv(here::here("inst/results/cov_mu.csv"))
+cov_corr <- read.csv(here::here("inst/results/cov_corr.csv"))
+```
+
+# Introduction
+Seasonal migratory movements between breeding and non-breeding areas are common phenomena across the animal kingdom [@OIK:OIK12559]. These movements, which can range in scale from tens of meters to thousands of kilometers, induce complexities on the demographic processes that shape population dynamics of migratory species. Theoretical and empirical studies have demonstrated that not only can migratory species experience limiting factors during any stage of the annual cycle [e.g., breeding, winter, migration; @sherry1996winter; @sutherland1996predicting], but also that environmental and demographic processes can interact across periods [@marra2015call]. As a result, understanding the factors that limit and regulate dynamics of migratory species requires population models that can accommodate processes operating across the full annual cycle [@hostetler2015full].      
+
+Full-annual-cycle models are a broad class of population models that include events occurring during both the breeding and non-breeding periods [@hostetler2015full]. In recent years, development of full-annual-cycle models, driven in large part by the need inform conservation planning for declining migratory species, has increased our understanding breeding vs. winter population limitation [@robinson2016full; @rushing2016quantifying; @taylor2017shape]. Most full-annual-cycle models, however, have either focused only on events occurring during the stationary breeding and winter periods or have lumped the migration and winter periods into a single "non-breeding" period [e.g., @wilson2011range]. As a result, the impact of the spring and autumn migration on the dynamics of migratory species remains poorly understood.  
+
+The primary obstacle to accounting for the migratory periods in full-annual-cycle models is the inability to quantify survival during these periods. For large species (> ~100g), the development of miniaturized satellite tags has revolutionized our ability to track migratory movements and mortality rates during these periods [e.g., @JANE:JANE12135]. Most species, however, are too small to directly track during migration [@bridge2011technology] and therefore survival during these periods can only be estimated from indirect (e.g., capture-mark-recapture) methods. In a seminal paper, @sillett2002variation used capture-recapture data from linked breeding and winter populations of Black-throated Blue Warblers (*Setophaga caerulescens*) to estimate overall migration survival (i.e., cumulative spring and autumn survival) and demonstrate that the majority of annual mortality in this species occurs during these periods. Subsequent application of this approach to several other migratory passerines [@paxton2017survivorship; @rockwell2017seasonal] has corroborated results from @sillett2002variation showing the highest seasonal mortality during migration. However, the method used by @sillett2002variation was not developed to separately estimate survival during spring and autumn migration. This limitation has prevented a full understanding of when mortality occurs across the annual cycle as well as how the survival during the migratory periods influences population dynamics.  
+
+Recently, @rushing2017spatial developed a novel integrated population model (IPM) to separately estimate spring and autumn migration survival. This model relies on breeding and winter capture-recapture data to estimate survival within and between each stationary period. By integrating the two data sets, it is possible to estimate the latent spring and autumn survival rates [@rushing2017spatial], though the accuracy and precision of these estimates has not been formally tested. Here, I used simulated data to explore the estimability of migration survival rates using this model. Under a variety of biologically-realistic scenarios, I demonstrate that spring and autumn migration survival can be estimated from the integrated capture-recapture model. I also show that the inclusion covariates can improve the model's performance compared to the use of capture data alone. These results open the door for full-annual-cycle population models to provide deeper understanding of the ecology of migratory species.  
+
+
+# Materials and Methods
+The models described here assume a simple migratory annual cycle, with two stationary periods separated by distinct migratory stages. In the remainder of the paper, I refer to the stationary periods as "breeding" and "winter" and to the migratory periods as "spring" and "autumn" (Fig. \@ref(fig:conceptual)). For all simulations, I assume a 4 month breeding season, 2 month autumn migration, 5 month winter period, and 1 month spring migration.    
+
+To infer survival during spring and autumn, the integrated model requires data sufficient to estimate survival within and between each stationary period. In practice, these estimates could come from a variety of data types and model frameworks but here I assume standard capture-mark-recapture data appropriate for estimating apparent survival using the basic Cormack-Jolly-Seber (CJS) model [@lebreton1992modeling]. I further assume that sampling within each stationary period takes place at the beginning and again at the end of each season, allowing one to estimate both within- and between-season survival probabilities (Fig. \@ref(fig:conceptual)). In the remainder of the paper, I refer to survival between breeding periods as $\phi_{BB}$ and survival between winter periods as $\phi_{BW}$.  
+
+```{r conceptual, fig.width=7, fig.asp=1, fig.cap="Conceptual diagram of the integrated survival model", echo = FALSE}
+
+knitr::include_graphics(path = here::here("vignettes/Figure1.pdf"), dpi = 300)
+```
+
+As illustrated in Fig. \@ref(fig:conceptual), $\phi_{BB}$ and $\phi_{BW}$ contain information about the latent autumn and spring survival rates. By integrating the breeding and winter CJS models in a unified analysis, the between-season survival rates can be parameterized in terms of the underlying seasonal-survival parameters. Specifically, 
+$$\phi_{BB, t} = \phi_{Aut, t} \phi_{Win, t} \phi_{Spr,t}\tag{1}$$
+$$\phi_{BW, t} = \phi_{Spr, t} \phi_{Sum, t+1} \phi_{Aut,t+1}\tag{2}$$
+where $\phi_{Sum, t}$ and $\phi_{Win, t}$ are the summer and winter survival probabilities estimated from from the capture-recapture data and $\phi_{Aut, t}$ and $\phi_{Spr,t}$ are the latent autumn and spring survival rates. When repeated over multiple years of sampling, equations 1 and 2 provide a system of equations that can be solved in terms of the latent survival rates.
+
+## Simulating survival data
+For each simulation, I generated data consistent with typical capture-mark-recapture sampling protocols. All simulations consisted of 12 years of sampling during both summer and winter and assumed 40 new individuals added to each population in each year. Mean monthly survival probabilities during summer, winter, and autumn were held constant across all simulations and were chosen to be biologically realistic for a small, migratory songbird ($\mu_{Sum} = 0.97$, $\mu_{Win} = 0.98$, $\mu_{Aut} = 0.90$). Mean monthly spring survival ($\mu_{Spr}$) varied across simulations (described below). Each simulation consisted of the following steps:
+
+1. *Determine mean spring migration survival*
+For each simulation, $\mu_{Spr}$ was determined as:
+$$ \mu_{Spr} = \Delta \times \mu_{Aut}\tag{3}$$
+where $\Delta$ is the relative difference between $\mu_{Spr}$ and $\mu_{Aut}$.
+
+2. *Simulate realized autumn/spring survival probabilities*  
+For each year $t$, realized monthly survival probability in autumn and spring were simulated as:  
+$$logit(\phi_{j,t}) = logit(\mu_{j}) + \beta_j X_{j,t} + \epsilon_{j, t} \quad \epsilon_{j, t} \sim MN(0, \Sigma)\tag{4}$$
+$$\Sigma  =
+ \begin{pmatrix}
+  \sigma^2_{Aut} & \rho \sqrt{\sigma^2_{Aut}\sigma^2_{Spr}} \\
+  \rho \sqrt{\sigma^2_{Aut}\sigma^2_{Spr}} & \sigma^2_{Spr}\\
+ \end{pmatrix}$$
+where $\phi_{j,t}$ is the realized monthly survival rate for season $j$ (autumn or spring), $\beta_j$ is the effect of covariate $X_{j,t}$ on $\phi_{j,t}$, $\Sigma$ is the variance-covariance matrix describing annual variation in spring and autumn migration, $\sigma^2_{Aut}$ and $\sigma^2_{Spr}$ are the annual variances of autumn and spring survival, and $\rho$ is the correlation between autumn and spring survival in a given year. Parameterizing the yearly survival rates in this way made it possible to independently vary the annual variance in and correlation between spring and autumn migration.  
+
+3. *Generate $\Phi$ matrix*  
+The monthly $\phi_{j,t}$ rates were converted into survival across the entire season by raising each to the appropriate number of months. The seasonal survival rates were then arranged in a matrix $\Phi$ containing the survival rates across all 48 seasons (12 years $\times$ 4 seasons/year): 
+$$\Phi = \big[0.97^4, {\phi_{Aut, 1}}^2, 0.98^5, \phi_{Spr, 1},...,0.97^4, {\phi_{Aut, 12}}^2, 0.98^5, \phi_{Spr, 12}\big]$$
+
+4. *Simulate summer/winter survival histories*  
+Survival histories were simulated for individuals in both the summer and winter populations using the occasion-specific survival probabilities in $\Phi$. Conditional on first capture, survival of individual $i$ across all subsequent seasons was modeled as:
+$$z_{i, j} \sim Bernoulli\big(z_{i, j - 1}\Phi_{j-1}\big)\tag{5}$$
+where $z_{i,j}$ is the true state (0 = dead, 1 = alive) of individual $i$ during season $j$ and $\Phi_{j-1}$ is the survival probability from season $j-1$ to season $j$. Note that although summer and winter survival histories were generated independently (i.e., did not share any individuals), individuals in both data sets shared the same survival rates during each occasion.    
+
+5. *Simulate capture histories*  
+To account for imperfect detection during each sampling period, individual capture histories were generated based on each individual's true state at sampling occasion $k$ and a season-specific recapture probability $p_j$: 
+$$y_{i, j, k} \sim Bernoulli\big(z_{i, j}p_{j}\big)\tag{6}$$
+where $y_{i, j, k}$ is the observed state (0 = not recaptured, 1 = recaptured) during season $j$ on occasion $k$ (beginning or end of season). For all simulations, $p_{Sum} = 0.6$ and $p_{Win} = 0.4$. 
+
+## Simulation scenarios
+Equations 3-6 contain several parameters that may influence estimability of the latent spring and autumn survival rates. To quantify the effects of these factors on model performance, I generated capture histories under a range of simulation scenarios:  
+
+*'Basic' model:* To understand the performance of the integrated CJS model in instances where no additional information is available (e.g., covariates), I simulated data following steps 1-5 while manipulating three parameters: $\Delta$, $\sigma^2_{j}$, and $\rho$. In the remainder of the paper, I refer to this as the 'basic' model. For each parameter, data were simulated under three levels corresponding to low, medium, and high values. To examine the influence of the relative difference between $\mu_{Spr}$ and $\mu_{Aut}$, data were generated assuming $\Delta$ = $1$, $0.875$, and $0.75$. Because $\mu_{Aut}$ was held constant at $0.9$ in all simulations, these scenarios correspond to $\mu_{Spr} = 0.9$, $0.78$, and $0.675$. To examine the effect of annual variation in migration survival on estimability, data were generated assuming $\sigma^2_j$ = $0.02$, $0.25$, and $0.50$. To minimize the total number of simulation scenarios, I assumed that $\sigma^2_{Aut} = \sigma^2_{Spr}$. To examine the effect of the correlation between $\phi_{Spr,t}$ and $\phi_{Aut,t}$, data were generated assuming $\rho$ = $0$, $0.4$, and $0.8$. In all cases, parameter values were chosen to produce biologically-realistic survival rates. For all 'basic' model simulations, $\beta_j$ in E. 4 was fixed at 0. The three parameters were varied in a factorial design, resulting in $3^3 = 27$ simulation scenarios.  
+
+
+*Covariate model:* To investigate whether including covariates improves estimation of the latent migration survival rates, I conducted additional simulations with a range of $\beta_j$ values for both spring and autumn ($0$, $0.5$, $1.0$) and $\sigma^2$ values ($0.02$, $0.25$, $0.50$). As for the basic model, these parameters were varied in a factorial design resulting in 27 scenarios. In all covariate models, $\Delta = 0.75$ and $\rho = 0$.   
+
+*Number of years:* Estimability of survival rates in CJS models is influenced by the number of years of capture-recapture data included in the analysis [@pollock1990statistical]. To investigate how study length influences estimability of migration survival rates, I conducted additional simulations of the 'basic' model with 4 - 11 years of data, resulting in 8 scenarios. For all study length simulations, $\Delta = 0.75$, $\sigma^2 = 0.25$, and $\rho = 0$. 
+
+## Model fit
+For each scenario, I simulated 250 data sets following steps 1-5 and estimated the joint likelihood of the model using JAGS version 3.3.0 [@plummer2012jags] called from program R version 3.3.1 [@R-base] with package jagsUI version 1.4.2 [@kellner2016jagsui]. Breeding and winter monthly survival rates were given uninformative $Uniform(0,1)$ priors and beta coefficients in the covariate models were given uninformative $Normal(0, 100)$ priors. The monthly spring and autumn survival probabilities were given weakly informative $Beta(3,2)$ priors. Initial model testing indicated that this prior improved convergence compared to an uninformative uniform prior. I ran three chains for 20,000 iterations each after an adaptation phase of 5,000 iterations and discarding the first 5,000 iterations as burn-in. To reduce autocorrelation in the chains, I saved every 10th iteration. Convergence was confirmed through Rhat values and visual inspections of trace plots. 
+
+
+## Model evaluation  
+Model performance was measured using four metrics. For the mean survival rates ($\mu_{Spr}$ and $\mu_{Aut}$), relative bias and root mean square error (RMSE) were measured as:
+$$Bias_j = \frac{\sum_{i=1}^{250}\big(\hat{\mu}_{i,j} - \mu_j\big)/\mu_j}{250}\tag{9}$$
+$$RMSE_j = \sqrt\frac{\sum_{i=1}^{250}\big(\hat{\mu}_{i,j} - \mu_j\big)^2}{250}\tag{10}$$
+where $\hat{\mu}_{i,j}$ is the estimated mean survival rate for season $j$ in simulation $i$. In some applications, researchers may also be interested in determining which season has the lowest survival. For simulations in which $\Delta < 1$, I also estimated the proportion of simulations in which  $\hat{\mu}_{Spr} < \hat{\mu}_{Aut}$. This metric provides an estimate of the power of the model to correctly infer which season has the lowest survival.  
+
+For the annual estimates ($\phi_{Aut, t}$ and $\phi_{Spr, t}$), performance was measured as the mean correlation between the estimated and true values:
+$$r_j = \frac{\sum_{i=1}^{250}cor\big(\hat{\phi}_{i,j,t}, \phi_{j,t}\big)}{250}\tag{11}$$
+where $\hat{\phi}_{i,j,t}$ is the estimated survival for season $j$ in year $t$ in simulation $i$. 
+
+# Results
+
+```{r joint1, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Relative bias and root mean square error of mean monthly survival estimates for spring and autumn migration as a function of the relative difference in survival between the two seasons ($\\Delta$) and annual variation in survival rates ($\\sigma^2$). In all simulations shown, $\\rho = 0$.", fig.width=14, fig.height=8}
+
+p <- FACsim::plot_joint1()
+p
+
+```
+
+For the 'basic' model, estimates of mean monthly spring and autumn survival ($\hat\mu_{Spr}$ and $\hat\mu_{Aut}$) were biased towards the overall mean migration survival rate (i.e., $\mu_{Aut}^2 \times \mu_{Spr}$). The magnitude of both bias and root mean square error (RMSE) were proportional to the relative difference between the seasonal survival rates ($\Delta$) and the magnitude of annual variation in survival rates ($\sigma^2$; Fig. \@ref(fig:joint1)). When mean monthly survival in spring and autumn were equal ($\Delta = 1$), $\hat\mu_{Spr}$ was biased on average by `r round(mean(basic_mu$rel.bias[basic_mu$Season == "Spring" & basic_mu$rel_diff == 1])*100, 2)`$\%$ while $\hat\mu_{Aut}$ was biased by `r round(mean(basic_mu$rel.bias[basic_mu$Season == "Autumn" & basic_mu$rel_diff == 1])*100, 2)`$\%$. Note that when monthly survival rates are equal, survival across the entire 2 month autumn period is lower than survival during the 1 month spring period, resulting in negative bias in $\hat\mu_{Spr}$ and positive bias in $\hat\mu_{Aut}$. When $\Delta = 0.75$, the direction of bias switched and the magnitude of bias in $\hat\mu_{Spr}$ increased to `r round(mean(basic_mu$rel.bias[basic_mu$Season == "Spring" & basic_mu$rel_diff == 0.75])*100, 2)`% and to `r round(mean(basic_mu$rel.bias[basic_mu$Season == "Autumn" & basic_mu$rel_diff == 0.75])*100, 2)`% for $\hat\mu_{Aut}$ (Fig. \@ref(fig:joint1)). 
+
+The degree of bias in $\hat\mu_{Spr}$ and $\hat\mu_{Aut}$ was inversely related to $\sigma^2$ (Fig. \@ref(fig:joint1)). Assuming $\Delta = 0.75$, bias in $\hat\mu_{Spr}$ was `r round(mean(basic_mu$rel.bias[basic_mu$Season == "Spring" & basic_mu$lsigma_phi_aut == 0.02 & basic_mu$rel_diff == 0.75])*100, 2)`% and bias in $\hat\mu_{Aut}$ was `r round(mean(basic_mu$rel.bias[basic_mu$Season == "Autumn" & basic_mu$lsigma_phi_aut == 0.02 & basic_mu$rel_diff == 0.75])*100, 2)`% when $\sigma^2 = 0.02$. In contrast, when $\sigma^2 = 0.5$, bias in $\hat\mu_{Spr}$ declined to `r round(mean(basic_mu$rel.bias[basic_mu$Season == "Spring" & basic_mu$lsigma_phi_aut == 0.5 & basic_mu$rel_diff == 0.75])*100, 2)`$\%$ and bias in $\hat\mu_{Aut}$ declined to `r round(mean(basic_mu$rel.bias[basic_mu$Season == "Autumn" & basic_mu$lsigma_phi_aut == 0.5 & basic_mu$rel_diff == 0.75])*100, 2)`$\%$. Despite the sources of bias in the basic model, power to detect the direction of survival differences (i.e., whether survival was lower in spring or autumn) was high (range = `r round(min(basic_mu$power[basic_mu$rel_diff != 1]*100), 0)` - `r round(max(basic_mu$power[basic_mu$rel_diff != 1]*100), 0)`%). Thus, the basic model was generally successful at determining which period had lower survival but tended to underestimate the difference between the two periods. Estimates of $\hat\mu_{Spr}$ and $\hat\mu_{Aut}$ were not influenced by correlation between spring and autumn migration ($\rho$; Figs. S1 & S2). 
+
+```{r cor1, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Correlation between estimated and true spring and autumn survival rates under the basic model. For all simulations shown, $\\Delta = 0.75$ and $\\rho = 0$. Points show estimates of $\\phi_{j,t}$ from all 250 simulations in each scenario. Solid and dashed black lines show the mean correlation for each season and the solid gray line indicates 1:1 correspondance between estimated and true survival. Values in parentheses are the $95\\%$ credible interval of the $r$ estimates.", fig.width=14, fig.height=8}
+
+p <- FACsim::plot_cor1()
+p
+
+
+```
+
+In all 'basic' model scenarios, estimates of spring and autumn survival were positively correlated with true survival but the magnitude of the correlation was strongly affected by $\sigma^2$ (Fig. \@ref(fig:cor1)). When spring and autumn survival showed little annual variation ($\sigma^2$ = 0.02), the correlation was small and non-significant ($r_{Spr}$ = `r round(basic_corr$rho[basic_corr$Season == "Spring" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.02], 2)`, 95% credible interval = `r round(basic_corr$LCI[basic_corr$Season == "Spring" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.02], 2)` - `r round(basic_corr$UCI[basic_corr$Season == "Spring" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.02], 2)`; $r_{Aut}$ = `r round(basic_corr$rho[basic_corr$Season == "Autumn" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.02], 2)`, `r round(basic_corr$LCI[basic_corr$Season == "Autumn" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.02], 2)` - `r round(basic_corr$UCI[basic_corr$Season == "Autumn" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.02], 2)`). However, as annual variation increased, survival estimates were more strongly correlated with true survival ($\sigma^2$ = 0.25: $r_{Spr}$ = `r round(basic_corr$rho[basic_corr$Season == "Spring" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.25], 2)`, `r round(basic_corr$LCI[basic_corr$Season == "Spring" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.25], 2)` - `r round(basic_corr$UCI[basic_corr$Season == "Spring" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.25], 2)`; $r_{Aut}$ = `r round(basic_corr$rho[basic_corr$Season == "Autumn" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.25], 2)`, `r round(basic_corr$LCI[basic_corr$Season == "Autumn" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.25], 2)` - `r round(basic_corr$UCI[basic_corr$Season == "Autumn" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.25], 2)`; $\sigma^2$ = 0.50: $r_{Spr}$ = `r round(basic_corr$rho[basic_corr$Season == "Spring" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.5], 2)`, `r round(basic_corr$LCI[basic_corr$Season == "Spring" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.5], 2)` - `r round(basic_corr$UCI[basic_corr$Season == "Spring" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.5], 2)`; $r_{Aut}$ = `r round(basic_corr$rho[basic_corr$Season == "Autumn" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.5], 2)`, `r round(basic_corr$LCI[basic_corr$Season == "Autumn" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.5], 2)` - `r round(basic_corr$UCI[basic_corr$Season == "Autumn" & basic_corr$rel_diff == 0.75 & basic_corr$cov_spr == 0 & basic_corr$lsigma_phi_aut == 0.5], 2)`). The correlations between true and estimated survival were inversely related to $\Delta$ but were not influenced by $\rho$ (Fig. S3).
+
+
+Including covariates in the model improved estimation of migration survival rates compared to the basic model, though the degree of improvement depended on $\sigma^2$. When $\sigma^2 = 0.02$, including covariates in the model greatly reduced both bias and RMSE (Fig. \@ref(fig:joint2)). In this scenario, including covariates with a strong effect ($\beta = 1$) reduced bias in $\hat\mu_{Spr}$ by `r (1 - round(cov_mu$rel.bias[cov_mu$Season == "Spring" & cov_mu$beta.spr == 1 & cov_mu$beta.aut == 1 & cov_mu$r.var == 0.02]/cov_mu$rel.bias[cov_mu$Season == "Spring" & cov_mu$beta.spr == 0 & cov_mu$beta.aut == 0 & cov_mu$r.var == 0.02], 2))*100`% (`r round(cov_mu$rel.bias[cov_mu$Season == "Spring" & cov_mu$beta.spr == 1 & cov_mu$beta.aut == 1 & cov_mu$r.var == 0.02], 2)*100`% when $\beta = 1$ vs. `r round(cov_mu$rel.bias[cov_mu$Season == "Spring" & cov_mu$beta.spr == 0 & cov_mu$beta.aut == 0 & cov_mu$r.var == 0.02], 2)*100`% when $\beta = 0$) and $\hat\mu_{Aut}$ by `r (1 - round(cov_mu$rel.bias[cov_mu$Season == "Autumn" & cov_mu$beta.spr == 1 & cov_mu$beta.aut == 1 & cov_mu$r.var == 0.02]/cov_mu$rel.bias[cov_mu$Season == "Autumn" & cov_mu$beta.spr == 0 & cov_mu$beta.aut == 0 & cov_mu$r.var == 0.02], 2))*100`% (`r round(cov_mu$rel.bias[cov_mu$Season == "Autumn" & cov_mu$beta.spr == 1 & cov_mu$beta.aut == 1 & cov_mu$r.var == 0.02], 2)*100`% vs. `r round(cov_mu$rel.bias[cov_mu$Season == "Autumn" & cov_mu$beta.spr == 0 & cov_mu$beta.aut == 0 & cov_mu$r.var == 0.02], 2)*100`%), despite a large relative difference between the two seasons ($\Delta$ = 0.75). In contrast, when $\sigma^2 = 0.5$, the effect of covariates was much smaller (`r (1 - round(cov_mu$rel.bias[cov_mu$Season == "Spring" & cov_mu$beta.spr == 1 & cov_mu$beta.aut == 1 & cov_mu$r.var == 0.5]/cov_mu$rel.bias[cov_mu$Season == "Spring" & cov_mu$beta.spr == 0 & cov_mu$beta.aut == 0 & cov_mu$r.var == 0.5], 2))*100`% and `r (1 - round(cov_mu$rel.bias[cov_mu$Season == "Autumn" & cov_mu$beta.spr == 1 & cov_mu$beta.aut == 1 & cov_mu$r.var == 0.5]/cov_mu$rel.bias[cov_mu$Season == "Autumn" & cov_mu$beta.spr == 0 & cov_mu$beta.aut == 0 & cov_mu$r.var == 0.5], 2))*100`% decreases in bias of $\hat\mu_{Spr}$ and $\hat\mu_{Aut}$, respectively). RMSE was similarly decreased through the inclusion of covariates and correlation between true and estimated survival was increased. For example, when strong covariates were included on both autumn and spring survival, $r_{Aut}$ increased to `r round(cov_corr$rho[cov_corr$Season == "Autumn" & cov_corr$beta.spr == 1 & cov_corr$beta.aut == 1 & cov_corr$r.var & cov_corr$r.var == 0.5], 2)` (95% credible interval = `r round(cov_corr$LCI[cov_corr$Season == "Autumn" & cov_corr$beta.spr == 1 & cov_corr$beta.aut == 1 & cov_corr$r.var & cov_corr$r.var == 0.5], 2)` -- `r round(cov_corr$UCI[cov_corr$Season == "Autumn" & cov_corr$beta.spr == 1 & cov_corr$beta.aut == 1 & cov_corr$r.var & cov_corr$r.var == 0.5], 2)`) and $r_{Spr}$ increased to `r round(cov_corr$rho[cov_corr$Season == "Spring" & cov_corr$beta.spr == 1 & cov_corr$beta.aut == 1 & cov_corr$r.var & cov_corr$r.var == 0.5], 2)` (95% credible interval = `r round(cov_corr$LCI[cov_corr$Season == "Spring" & cov_corr$beta.spr == 1 & cov_corr$beta.aut == 1 & cov_corr$r.var & cov_corr$r.var == 0.5], 2)` -- `r round(cov_corr$UCI[cov_corr$Season == "Spring" & cov_corr$beta.spr == 1 & cov_corr$beta.aut == 1 & cov_corr$r.var & cov_corr$r.var == 0.5], 2)`; Fig. \@ref(fig:cor2)). As in the basic model, power to detect the direction of survival differences was high when covariates were included in the model (range = `r round(min(cov_mu$power[cov_mu$beta.spr != 0 & cov_mu$beta.aut!=0]*100), 0)` - `r round(max(cov_mu$power[cov_mu$beta.spr != 0 & cov_mu$beta.aut!=0]*100), 0)`%).
+
+```{r joint2, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Relative bias and root mean square error of mean monthly survival estimates for spring and autumn migration as a function of covariate effect size ($\\beta$) and annual variation in survival rates ($\\sigma^2$). The x-axis refers to the simulated value of both $\\beta_{Spr}$ and $\\beta_{Aut}$. In all simulations shown, $\\Delta = 0.75$ and $\\rho = 0$.", fig.width=14, fig.height=8}
+
+p <- FACsim::plot_joint2()
+p
+
+```
+
+```{r cor2, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Correlation between estimated and true spring and autumn survival rates under the covariate models. In each panel, $\\beta$ refers to the simulated value of both $\\beta_{Spr}$ and $\\beta_{Aut}$. For all simulations shown, $\\sigma^2 = 0.25$. Points show estimates of $\\phi_{j,t}$ from all 250 simulations in each scenario. Solid and dashed black lines show the mean correlation for each season and the solid gray line indicates 1:1 correspondance between estimated and true survival. Values in parentheses are the $95\\%$ credible interval of the $r$ estimates.", fig.width=14, fig.height=7}
+
+p <- FACsim::plot_cor2()
+p
+
+```
+
+Both bias and RMSE of $\hat\mu_{Aut}$ tended to decrease as additional years of capture-recapture data were included in the analysis (Fig. \@ref(fig:joint3)), but reached an asymptote with ~10 years of data. Interestingly, neither bias or RMSE of $\hat\mu_{Spr}$ estimates were influenced by the number of years of data. The mean correlation between the true and estimated yearly survival rates tended to increase with additional years of data when the number of years was less than 6 but beyond 6-7 years of data there was no further increase in the mean $r$ for either season. However, longer time frames greatly improved the precision of the $r$ estimates, as evident from the decreasing width of the $r$ credible intervals as the number of years increased (Fig. \@ref(fig:cor3)).  
+
+```{r joint3, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Relative bias and root mean square error of mean monthly survival estimates for spring and autumn migration as a function of study length. In all simulations shown, $\\Delta = 0.75$, $\\sigma^2 = 0.25$, and $\\rho = 0$.", fig.width=6, fig.height=9}
+
+p <- FACsim::plot_joint3()
+p
+```
+
+
+```{r cor3, echo=FALSE, message=FALSE, warning=FALSE, fig.cap="Correlation between estimated and true spring and autumn survival rates under different simulated study lengths. For all scenarios shown, $\\Delta = 0.75$, $\\sigma^2 == 0.25$, and $\\rho = 0$. Points show estimates of $\\phi_{j,t}$ from all 250 simulations in each scenario. Solid and dashed black lines show the mean correlation between true and estimated survival for each season and the solid gray line indicates 1:1 correspondance. Values in parentheses are the $95\\%$ credible interval of the $r$ estimates.", fig.width=14, fig.height=7}
+
+p <- FACsim::plot_cor3()
+p
+```
+
+# Discussion
+
+The twice-annual migrations made by billions of individual organisms each year are among the most fascinating phenomena in the natural world. These movements have important implications for the population dynamics and conservation of migratory species but have proven difficult to study in most species. Using simulated data, I demonstrate that the integrated survival model developed by Rushing et al. (2017) is capable of estimating latent spring and autumn survival probabilities from capture-recapture data. 
+
+When no additional information is available (e.g., covariates), estimates of mean monthly survival during spring and autumn were biased towards the overall 'migration' survival probability, though the model had high power to detect which season had lower survival. The magnitude of bias in the mean monthly survival rates was positively related to the relative difference between spring and autumn survival and negatively related to the amount of annual variation in these survival rates. Thus, bias in the basic model was lowest when the difference between spring and autumn survival was small and when annual variation was high. The correlation between estimated and true migration survival rates was also influenced by the amount of annual variation, with higher correlations occurring when annual variation was high. Lower bias and higher $r$ with increasing year-to-year variation is likely the result of smaller ranges of plausible combinations of spring and autumn survival in the time series defined by Eqs. 1-2. 
+
+Including covariates in the model improved estimation of spring and autumn migration rates. When annual variation in these rates was small, the additional information provided by the covariates greatly reduced bias and RMSE and increased the correlation between estimated and true survival compared to the basic model, even when covariates had only a moderate effect ($\beta = 0.5$; Figs. S4-S6). However, when annual variation in spring and autumn survival rates was high, including covariates resulted in only small improvements to parameter estimates, likely because the plausible combinations of spring and autumn survival were already reduced by the year-to-year variation. Interestingly, covariates has little effect on the estimation of survival rates during the opposite migratory period (Fig. S6), suggesting that model performance will be best when covariates are included for both spring and autumn migration.  
+
+For most species, researchers may have little *a priori* knowledge about the demographic or environmental processes that influence migration survival. In these cases, it may be useful to identify processes known to influence annual survival and test these as covariates on spring and/or autumn migration. For example, @sillett2000impacts found that El Niño/La Niña cycles have a strong influence on annual survival of Black-throated Blue Warblers wintering in Jamaica. Subsequent analysis of these data using the framework presented here indicated that the El Niño/La Niña effects primarily influence spring migration survival rather than survival during the stationary winter or breeding periods (C.S. Rushing & T.S. Sillett *unpub*). Because covariates of annual survival are known for many species, this may be a useful approach for improving estimates of migration survival in many species.  
+
+Currently, only one published study has used this integrated survival model to estimate the latent spring and autumn survival rates from capture-recapture data. Using a modification of the basic model presented here, Rushing et al. (2017) found that apparent spring migration survival of Wood Thrush (*Hylocichla mustelina*) was ~5% and 50% lower than autumn survival for adults and juveniles, respectively. Based on the results presented in this paper, we conclude that the direction of these differences ($\mu_{Spr} < \mu_{Aut}$) is likely correct but that the magnitudes of the differences were likely underestimated. 
+
+In addition to the assumptions of conventional CJS models, the integrated survival model assumes that individuals in each population have the same seasonal survival rates. Thus, although it is not necessary to sample the same individuals in each season, the integrated model does require data from linked breeding and winter populations. Application of this method is therefore dependent on sufficient survival data as well as information about migratory connectivity of the sampled populations [@webster2002links]. Similar to the CJS assumption of no individual heterogeneity, violation of this assumption could result in biased survival estimates depending on the strength of migratory connectivity [@cohenquantifying] as well as the amount of heterogeneity in survival rates among populations. The influence of migratory connectivity on estimation of seasonal survival rates requires additional study, though the simulations needed are beyond the scope of this paper. 
+
+The ability to estimate seasonal survival rates of small, migratory organisms opens the door to advancing our understanding of these species. At present, application of this method is likely restricted to a few well-studied species that have adequate survival data from linked populations. Future efforts focused on quantifying migratory connectivity and collecting mark-recapture data, especially from wintering populations, are urgently needed for many other species, especially those of conservation concern. Collection of those data, along with further development of integrated models for estimating seasonal survival and population dynamics, will provided even deeper insights into the ecology and conservation of migratory species.    
+
+# Acknowledgements
+
+Thanks to the organizers of the EURING 2017 conference in Barcelona, particularly B. Gardner, R. Robinson, P. Marra, and A. Johnston, for the opportunity to include this contribution in the proceedings. 
+
+# Code and data accessibility
+
+All code necessary for simulating data, fitting models, and generating figures are available on the author's personal github page (http://github.com/crushing05/FACsim) and can be installed and loaded as an R package using the commands `install.packages("devtools"); devtools::install_github('crushing05/FACsim)`.
+
+# References

@@ -1,9 +1,25 @@
 Package: FACsim
 Version: 0.0.0.9000
-Title: What the Package Does (One Line, Title Case)
-Description: What the package does (one paragraph).
-Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
-License: What license is it under?
+Title: Estimating of Migration Survival
+Description: Data and code to reproduce results and figures from Rushing, Clark
+    S. 2018 "Estimability of migration survival rates from integrated breeding and
+    winter capture-recapture data" *Methods in Ecology and Evolution*.
+Authors@R: person("Rushing", "Clark", email = "crushing05@gmail.com", role = c("aut", "cre"))
+License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: true
 ByteCompile: true
+RoxygenNote: 5.0.1
+Imports: 
+    jagsUI,
+    dplyr,
+    ggplot2,
+    MASS,
+    bookdown,
+    knitr,
+    doParallel,
+    foreach,
+    here
+VignetteBuilder: knitr
+Suggests: 
+    rmarkdown
